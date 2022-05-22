@@ -1,5 +1,5 @@
 <resources>
-    <string name="tfe_pe_app_name">TFL Pose Estimation</string>
+    <string name="tfe_pe_app_name">Exercise counter</string>
     <string name="tfe_pe_request_permission">This app needs camera permission.</string>
     <string name="tfe_pe_tv_score">Score: %.2f</string>
     <string name="tfe_pe_tv_model">Model: </string>
@@ -9,6 +9,10 @@
     <string name="tfe_pe_tv_pose_classification">Pose Classification</string>
     <string name="tfe_pe_tv_tracking">Tracker: </string>
     <string name="tfe_pe_gpu_error">Movenet MultiPose does not support GPU. Fallback to CPU.</string>
+    <string name="first_time_opened">App opened first time</string>
+    <string name="stop_dialog_title">Finish workout?</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
     <string-array name="tfe_pe_models_array">
         <item>Movenet Lightning</item>
         <item>Movenet Thunder</item>
@@ -27,4 +31,14 @@
         <item>BoundingBox</item>
         <item>Keypoint</item>
     </string-array>
+    <string name="title_activity_menu">MenuActivity</string>
+    <string name="dummy_button">Dummy Button</string>
+    <string name="dummy_content">DUMMY\nCONTENT</string>
+    <string name="workout_history">Check out you workout history</string>
+    <string name="counter_desc">Get active and count your reps</string>
+    <string name="history">History</string>
+    <string name="counter">Counter</string>
+    <string name="start">Start</string>
+    <string name="open">Open</string>
+    <string name="current_workout">Current Workout:</string>
 </resources>

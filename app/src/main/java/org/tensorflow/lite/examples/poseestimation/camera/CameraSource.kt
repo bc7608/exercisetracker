@@ -18,6 +18,7 @@ package org.tensorflow.lite.examples.poseestimation.camera
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
 import android.graphics.Matrix
@@ -32,9 +33,12 @@ import android.os.HandlerThread
 import android.util.Log
 import android.view.Surface
 import android.view.SurfaceView
+import android.widget.TextView
 import kotlinx.coroutines.suspendCancellableCoroutine
+import org.tensorflow.lite.examples.poseestimation.Counter
 import org.tensorflow.lite.examples.poseestimation.VisualizationUtils
 import org.tensorflow.lite.examples.poseestimation.YuvToRgbConverter
+import org.tensorflow.lite.examples.poseestimation.data.BodyPart
 import org.tensorflow.lite.examples.poseestimation.data.Person
 import org.tensorflow.lite.examples.poseestimation.ml.MoveNetMultiPose
 import org.tensorflow.lite.examples.poseestimation.ml.PoseClassifier
@@ -46,7 +50,9 @@ import kotlin.coroutines.resumeWithException
 
 class CameraSource(
     private val surfaceView: SurfaceView,
-    private val listener: CameraSourceListener? = null
+    private val listener: CameraSourceListener? = null,
+    private val counter:Counter? = null,
+    private val context: Context
 ) {
 
     companion object {
@@ -92,6 +98,9 @@ class CameraSource(
     private var imageReaderHandler: Handler? = null
     private var cameraId: String = ""
 
+
+
+
     suspend fun initCamera() {
         camera = openCamera(cameraManager, cameraId)
         imageReader =
@@ -110,7 +119,7 @@ class CameraSource(
                 yuvConverter.yuvToRgb(image, imageBitmap)
                 // Create rotated version for portrait display
                 val rotateMatrix = Matrix()
-                rotateMatrix.postRotate(90.0f)
+                rotateMatrix.postRotate(-90.0f)
 
                 val rotatedBitmap = Bitmap.createBitmap(
                     imageBitmap, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT,
@@ -166,15 +175,17 @@ class CameraSource(
         for (cameraId in cameraManager.cameraIdList) {
             val characteristics = cameraManager.getCameraCharacteristics(cameraId)
 
-            // We don't use a front facing camera in this sample.
+            // We don't use a back facing camera in this sample.
             val cameraDirection = characteristics.get(CameraCharacteristics.LENS_FACING)
             if (cameraDirection != null &&
-                cameraDirection == CameraCharacteristics.LENS_FACING_FRONT
+                cameraDirection == CameraCharacteristics.LENS_FACING_BACK
             ) {
                 continue
             }
+
             this.cameraId = cameraId
         }
+
     }
 
     fun setDetector(detector: PoseDetector) {
@@ -242,6 +253,8 @@ class CameraSource(
     // process image
     private fun processImage(bitmap: Bitmap) {
         val persons = mutableListOf<Person>()
+
+
         var classificationResult: List<Pair<String, Float>>? = null
 
         synchronized(lock) {
@@ -250,12 +263,20 @@ class CameraSource(
 
                 // if the model only returns one item, allow running the Pose classifier.
                 if (persons.isNotEmpty()) {
+                    //Log.i("COUNTER", persons[0].keyPoints.toString())
                     classifier?.run {
                         classificationResult = classify(persons[0])
+
                     }
                 }
             }
         }
+        val count = counter?.OnFrame(persons[0], context)
+        //Log.i("COUNTER", count.toString())
+        if (count != null) {
+            listener?.onCounterListener(count)
+        }
+
         frameProcessedInOneSecondInterval++
         if (frameProcessedInOneSecondInterval == 1) {
             // send fps to view
@@ -266,8 +287,13 @@ class CameraSource(
         if (persons.isNotEmpty()) {
             listener?.onDetectedInfo(persons[0].score, classificationResult)
         }
+
+
+
         visualize(persons, bitmap)
     }
+
+
 
     private fun visualize(persons: List<Person>, bitmap: Bitmap) {
 
@@ -323,5 +349,7 @@ class CameraSource(
         fun onFPSListener(fps: Int)
 
         fun onDetectedInfo(personScore: Float?, poseLabels: List<Pair<String, Float>>?)
+
+        fun onCounterListener(count:Int)
     }
 }

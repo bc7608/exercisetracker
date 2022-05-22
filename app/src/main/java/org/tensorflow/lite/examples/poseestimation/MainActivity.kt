@@ -19,6 +19,7 @@ package org.tensorflow.lite.examples.poseestimation
 import android.Manifest
 import android.app.AlertDialog
 import android.app.Dialog
+import android.content.DialogInterface
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Process
@@ -33,10 +34,16 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.tensorflow.lite.examples.poseestimation.camera.CameraSource
+import org.tensorflow.lite.examples.poseestimation.data.AppDatabase
 import org.tensorflow.lite.examples.poseestimation.data.Device
+import org.tensorflow.lite.examples.poseestimation.data.Workout
 import org.tensorflow.lite.examples.poseestimation.ml.*
+import java.sql.Date
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -46,6 +53,8 @@ class MainActivity : AppCompatActivity() {
     /** A [SurfaceView] for camera preview.   */
     private lateinit var surfaceView: SurfaceView
 
+    private var currentCount: Int = 0
+
     /** Default pose estimation model is 1 (MoveNet Thunder)
      * 0 == MoveNet Lightning model
      * 1 == MoveNet Thunder model
@@ -54,15 +63,17 @@ class MainActivity : AppCompatActivity() {
      **/
     private var modelPos = 1
 
+    private var counter:Counter? = null
+
     /** Default device is CPU */
     private var device = Device.CPU
 
     private lateinit var tvScore: TextView
     private lateinit var tvFPS: TextView
-    private lateinit var spnDevice: Spinner
-    private lateinit var spnModel: Spinner
+    private lateinit var tvWorkoutType: TextView
     private lateinit var spnTracker: Spinner
     private lateinit var vTrackerOption: View
+    private lateinit var tvCounter: TextView
     private lateinit var tvClassificationValue1: TextView
     private lateinit var tvClassificationValue2: TextView
     private lateinit var tvClassificationValue3: TextView
@@ -88,68 +99,52 @@ class MainActivity : AppCompatActivity() {
                     .show(supportFragmentManager, FRAGMENT_DIALOG)
             }
         }
-    private var changeModelListener = object : AdapterView.OnItemSelectedListener {
-        override fun onNothingSelected(parent: AdapterView<*>?) {
-            // do nothing
-        }
 
-        override fun onItemSelected(
-            parent: AdapterView<*>?,
-            view: View?,
-            position: Int,
-            id: Long
-        ) {
-            changeModel(position)
-        }
+
+    override fun onBackPressed() {
+        val builder:AlertDialog.Builder? = let { AlertDialog.Builder(it) }
+        builder?.setTitle(R.string.stop_dialog_title)
+            ?.setPositiveButton(R.string.confirm, DialogInterface.OnClickListener { dialogInterface, i ->
+                cameraSource?.close()
+                counter?.count = 0
+                val workout = Workout(
+                    type = "squats",
+                    dateTime = Date(),
+                    count = currentCount,
+                    uid = 0
+                )
+
+                val db = AppDatabase.getInstance(this)
+                val workoutDao = db.workoutDao()
+                workoutDao.insertAll(workout)
+                super.onBackPressed()
+            })
+            ?.setNegativeButton(R.string.cancel,null)
+
+        var dialog: AlertDialog? = builder?.create()
+        dialog?.show()
     }
-
-    private var changeDeviceListener = object : AdapterView.OnItemSelectedListener {
-        override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-            changeDevice(position)
-        }
-
-        override fun onNothingSelected(parent: AdapterView<*>?) {
-            // do nothing
-        }
-    }
-
-    private var changeTrackerListener = object : AdapterView.OnItemSelectedListener {
-        override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-            changeTracker(position)
-        }
-
-        override fun onNothingSelected(parent: AdapterView<*>?) {
-            // do nothing
-        }
-    }
-
-    private var setClassificationListener =
-        CompoundButton.OnCheckedChangeListener { _, isChecked ->
-            showClassificationResult(isChecked)
-            isClassifyPose = isChecked
-            isPoseClassifier()
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         // keep screen on while app is running
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        tvScore = findViewById(R.id.tvScore)
-        tvFPS = findViewById(R.id.tvFps)
-        spnModel = findViewById(R.id.spnModel)
-        spnDevice = findViewById(R.id.spnDevice)
-        spnTracker = findViewById(R.id.spnTracker)
-        vTrackerOption = findViewById(R.id.vTrackerOption)
+
+
         surfaceView = findViewById(R.id.surfaceView)
-        tvClassificationValue1 = findViewById(R.id.tvClassificationValue1)
-        tvClassificationValue2 = findViewById(R.id.tvClassificationValue2)
-        tvClassificationValue3 = findViewById(R.id.tvClassificationValue3)
-        swClassification = findViewById(R.id.swPoseClassification)
-        vClassificationOption = findViewById(R.id.vClassificationOption)
-        initSpinner()
-        spnModel.setSelection(modelPos)
-        swClassification.setOnCheckedChangeListener(setClassificationListener)
+        tvFPS = findViewById(R.id.tvFps)
+        tvWorkoutType = findViewById(R.id.workout_type)
+        tvCounter = findViewById(R.id.counter_text)
+        counter = Counter(this, object : Counter.CounterListener{
+            override fun onExcerciseChangedListener(workoutType: String) {
+                runOnUiThread {
+                    tvWorkoutType.text = workoutType.uppercase()
+                }
+
+            }
+
+        })
         if (!isCameraPermissionGranted()) {
             requestPermission()
         }
@@ -193,25 +188,18 @@ class MainActivity : AppCompatActivity() {
                         override fun onDetectedInfo(
                             personScore: Float?,
                             poseLabels: List<Pair<String, Float>>?
-                        ) {
-                            tvScore.text = getString(R.string.tfe_pe_tv_score, personScore ?: 0f)
-                            poseLabels?.sortedByDescending { it.second }?.let {
-                                tvClassificationValue1.text = getString(
-                                    R.string.tfe_pe_tv_classification_value,
-                                    convertPoseLabels(if (it.isNotEmpty()) it[0] else null)
-                                )
-                                tvClassificationValue2.text = getString(
-                                    R.string.tfe_pe_tv_classification_value,
-                                    convertPoseLabels(if (it.size >= 2) it[1] else null)
-                                )
-                                tvClassificationValue3.text = getString(
-                                    R.string.tfe_pe_tv_classification_value,
-                                    convertPoseLabels(if (it.size >= 3) it[2] else null)
-                                )
+                        ) { }
+
+                        override fun onCounterListener(count: Int) {
+                            currentCount = count
+
+
+                            runOnUiThread {
+                                tvCounter.text = count.toString()
                             }
                         }
 
-                    }).apply {
+                    }, counter, this).apply {
                         prepareCamera()
                     }
                 isPoseClassifier()
@@ -223,118 +211,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun convertPoseLabels(pair: Pair<String, Float>?): String {
-        if (pair == null) return "empty"
-        return "${pair.first} (${String.format("%.2f", pair.second)})"
-    }
 
     private fun isPoseClassifier() {
         cameraSource?.setClassifier(if (isClassifyPose) PoseClassifier.create(this) else null)
     }
 
-    // Initialize spinners to let user select model/accelerator/tracker.
-    private fun initSpinner() {
-        ArrayAdapter.createFromResource(
-            this,
-            R.array.tfe_pe_models_array,
-            android.R.layout.simple_spinner_item
-        ).also { adapter ->
-            // Specify the layout to use when the list of choices appears
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            // Apply the adapter to the spinner
-            spnModel.adapter = adapter
-            spnModel.onItemSelectedListener = changeModelListener
-        }
 
-        ArrayAdapter.createFromResource(
-            this,
-            R.array.tfe_pe_device_name, android.R.layout.simple_spinner_item
-        ).also { adaper ->
-            adaper.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
 
-            spnDevice.adapter = adaper
-            spnDevice.onItemSelectedListener = changeDeviceListener
-        }
 
-        ArrayAdapter.createFromResource(
-            this,
-            R.array.tfe_pe_tracker_array, android.R.layout.simple_spinner_item
-        ).also { adaper ->
-            adaper.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-
-            spnTracker.adapter = adaper
-            spnTracker.onItemSelectedListener = changeTrackerListener
-        }
-    }
-
-    // Change model when app is running
-    private fun changeModel(position: Int) {
-        if (modelPos == position) return
-        modelPos = position
-        createPoseEstimator()
-    }
-
-    // Change device (accelerator) type when app is running
-    private fun changeDevice(position: Int) {
-        val targetDevice = when (position) {
-            0 -> Device.CPU
-            1 -> Device.GPU
-            else -> Device.NNAPI
-        }
-        if (device == targetDevice) return
-        device = targetDevice
-        createPoseEstimator()
-    }
-
-    // Change tracker for Movenet MultiPose model
-    private fun changeTracker(position: Int) {
-        cameraSource?.setTracker(
-            when (position) {
-                1 -> TrackerType.BOUNDING_BOX
-                2 -> TrackerType.KEYPOINTS
-                else -> TrackerType.OFF
-            }
-        )
-    }
 
     private fun createPoseEstimator() {
         // For MoveNet MultiPose, hide score and disable pose classifier as the model returns
         // multiple Person instances.
         val poseDetector = when (modelPos) {
-            0 -> {
-                // MoveNet Lightning (SinglePose)
-                showPoseClassifier(true)
-                showDetectionScore(true)
-                showTracker(false)
-                MoveNet.create(this, device, ModelType.Lightning)
-            }
             1 -> {
-                // MoveNet Thunder (SinglePose)
-                showPoseClassifier(true)
-                showDetectionScore(true)
-                showTracker(false)
+                //showTracker(false)
                 MoveNet.create(this, device, ModelType.Thunder)
             }
-            2 -> {
-                // MoveNet (Lightning) MultiPose
-                showPoseClassifier(false)
-                showDetectionScore(false)
-                // Movenet MultiPose Dynamic does not support GPUDelegate
-                if (device == Device.GPU) {
-                    showToast(getString(R.string.tfe_pe_gpu_error))
-                }
-                showTracker(true)
-                MoveNetMultiPose.create(
-                    this,
-                    device,
-                    Type.Dynamic
-                )
-            }
             3 -> {
-                // PoseNet (SinglePose)
-                showPoseClassifier(true)
-                showDetectionScore(true)
-                showTracker(false)
+                //showTracker(false)
                 PoseNet.create(this, device)
             }
             else -> {
@@ -346,26 +241,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Show/hide the pose classification option.
-    private fun showPoseClassifier(isVisible: Boolean) {
-        vClassificationOption.visibility = if (isVisible) View.VISIBLE else View.GONE
-        if (!isVisible) {
-            swClassification.isChecked = false
-        }
-    }
 
-    // Show/hide the detection score.
-    private fun showDetectionScore(isVisible: Boolean) {
-        tvScore.visibility = if (isVisible) View.VISIBLE else View.GONE
-    }
-
-    // Show/hide classification result.
-    private fun showClassificationResult(isVisible: Boolean) {
-        val visibility = if (isVisible) View.VISIBLE else View.GONE
-        tvClassificationValue1.visibility = visibility
-        tvClassificationValue2.visibility = visibility
-        tvClassificationValue3.visibility = visibility
-    }
 
     // Show/hide the tracking options.
     private fun showTracker(isVisible: Boolean) {

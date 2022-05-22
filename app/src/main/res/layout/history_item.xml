@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:orientation="vertical"
+    android:padding="10dp"
+    android:layout_height="wrap_content">
+
+    <RelativeLayout
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="12dp"
+        android:id="@+id/icon_container"
+        android:orientation="vertical"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+
+        <RelativeLayout
+            android:layout_centerInParent="true"
+            android:id="@+id/icon_front"
+            android:layout_width="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_marginTop="10dp"
+            android:layout_height="wrap_content">
+
+
+
+            <ImageView
+                android:id="@+id/workout"
+                android:src="@drawable/barbell"
+                android:layout_width="40dp"
+                android:layout_centerInParent="true"
+                android:layout_height="40dp" />
+
+        </RelativeLayout>
+
+    </RelativeLayout>
+
+    <LinearLayout
+        android:id="@+id/text_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="30dp"
+        android:layout_marginTop="15dp"
+        android:layout_toEndOf="@id/icon_container"
+        android:orientation="vertical">
+
+        <TextView
+            android:maxLines="1"
+            android:maxLength="20"
+            android:ellipsize="end"
+            android:id="@+id/workout_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/black"
+            android:textSize="17sp"
+            tools:text="Squats" />
+
+        <TextView
+            android:maxLines="1"
+            android:maxLength="20"
+            android:ellipsize="end"
+            android:id="@+id/workout_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="@color/gray"
+            android:textStyle="bold"
+            tools:text="23 mar"
+            />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/workout_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="15dp"
+        android:layout_marginEnd="10dp"
+        android:textColor="@color/gray"
+        android:textStyle="bold"
+        tools:text="25" />
+
+</RelativeLayout>
