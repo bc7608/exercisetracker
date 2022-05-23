@@ -15,23 +15,13 @@ class Counter(
     private val listener: CounterListener? = null
 ) {
 
-    val tts: TextToSpeech
 
-
-
-
-    init {
-        tts = TextToSpeech(context
-        ) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-            }
-        }
-    }
 
     val MIN_AMPLITUDE = 40
     val REP_THRESHOLD = 0.8
     val MIN_CONFIDENCE = 0.5
-    val EXERCISE_CHANGE_TRESHOLD = 450.0f
+    val UNKNOWN_CONFIDENCE = 0.3
+    val EXERCISE_CHANGE_TRESHOLD = 550.0f
 
     var count = 0
 
@@ -42,13 +32,14 @@ class Counter(
     var top = 0
     var bottom = 0
 
-
+    var currentCount = 0
 
     var leftWristY = 0.0f
     var rightWristY = 0.0f
 
     //push ups or squats
-    var workoutType = "UNKNOWN"
+    var workoutType = ""
+    var prevWorkoutType = ""
 
 
     fun OnFrame(person: Person, context: Context) : Int {
@@ -63,30 +54,40 @@ class Counter(
 
 
             if (leftWristY > EXERCISE_CHANGE_TRESHOLD && rightWristY > EXERCISE_CHANGE_TRESHOLD){
-                if (workoutType == "PUSH_UPS"){
+                if (first){
+                    workoutType = "SQUATS"
+                    listener?.onExcerciseChangedListener(workoutType, prevWorkoutType, currentCount)
+                }
+                else if (!first && workoutType == "PUSH UPS"){
+                    prevWorkoutType = "PUSH UPS"
+                    currentCount = count
                     count = 0
+                    workoutType = "SQUATS"
+                    listener?.onExcerciseChangedListener(workoutType, prevWorkoutType, currentCount)
+
 
                 }
-                if (first || workoutType == "PUSH_UPS"){
-                    Toast.makeText(context, "Now doing Squats", Toast.LENGTH_LONG).show()
-                }
-                workoutType = "SQUATS"
+
+
             }
             else if (leftWristY < EXERCISE_CHANGE_TRESHOLD && rightWristY < EXERCISE_CHANGE_TRESHOLD){
-                if (workoutType == "SQUATS"){
+                if(first){
+                    workoutType = "PUSH UPS"
+                    listener?.onExcerciseChangedListener(workoutType, prevWorkoutType, currentCount)
+                }
+                else if (!first && workoutType == "SQUATS"){
+                    prevWorkoutType = "SQUATS"
+                    currentCount = count
                     count = 0
+                    workoutType = "PUSH UPS"
+                    listener?.onExcerciseChangedListener(workoutType, prevWorkoutType, currentCount)
 
                 }
-                if (first || workoutType == "SQUATS"){
-                    Toast.makeText(context, "Now doing Pushups", Toast.LENGTH_LONG).show()
-                }
-
-                workoutType = "PUSH_UPS"
             }
 
 
-            //Log.i("HANDS", "$leftWristY: LEFT WRIST")
-            //Log.i("HANDS", "$rightWristY: RIGHT WRIST")
+            Log.i("HANDS", "$leftWristY: LEFT WRIST")
+            Log.i("HANDS", "$rightWristY: RIGHT WRIST")
 
             val dy = y - prev_y
             if (!first) {
@@ -95,7 +96,6 @@ class Counter(
                         if (top - bottom > MIN_AMPLITUDE) {
                             count++
                             goal = -1
-                            OnRep()
                         }
                     }
                     else if (goal == -1 && dy < 0 && (top - y) > (top - bottom) * REP_THRESHOLD) {
@@ -115,8 +115,12 @@ class Counter(
             first = false
             prev_y = y
             prev_dy = dy
-            listener?.onExcerciseChangedListener(workoutType)
+
+        } else if(person.keyPoints[BodyPart.NOSE.ordinal].score < UNKNOWN_CONFIDENCE){
+            listener?.onUnknownListener()
         }
+
+
 
         return count
     }
@@ -124,12 +128,12 @@ class Counter(
 
 
 
-    fun OnRep() {
-        tts.speak(count.toString(), QUEUE_ADD, null)
-    }
+
 
     interface CounterListener {
-        fun onExcerciseChangedListener(workoutType: String)
+        fun onExcerciseChangedListener(workoutType: String, prevWorkoutType: String, count: Int)
+
+        fun onUnknownListener()
     }
 
 

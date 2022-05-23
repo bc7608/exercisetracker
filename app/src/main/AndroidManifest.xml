@@ -12,6 +12,7 @@
         android:required="true" />
 
     <application
+        android:name=".ExerciseCounter"
         android:allowBackup="true"
         android:icon="@drawable/barbell"
         android:label="@string/tfe_pe_app_name"

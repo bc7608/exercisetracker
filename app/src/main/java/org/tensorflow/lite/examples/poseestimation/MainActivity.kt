@@ -28,6 +28,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
@@ -39,11 +40,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.tensorflow.lite.examples.poseestimation.camera.CameraSource
 import org.tensorflow.lite.examples.poseestimation.data.AppDatabase
+import org.tensorflow.lite.examples.poseestimation.data.AppDatabaseViewModel
 import org.tensorflow.lite.examples.poseestimation.data.Device
 import org.tensorflow.lite.examples.poseestimation.data.Workout
 import org.tensorflow.lite.examples.poseestimation.ml.*
 import java.sql.Date
 import java.util.*
+import kotlin.random.Random
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -100,6 +103,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    private val appDatabaseViewModel: AppDatabaseViewModel by viewModels {
+        AppDatabaseViewModel.AppDatabaseViewModelFactory((application as ExerciseCounter).repository)
+    }
+
 
     override fun onBackPressed() {
         val builder:AlertDialog.Builder? = let { AlertDialog.Builder(it) }
@@ -107,16 +114,8 @@ class MainActivity : AppCompatActivity() {
             ?.setPositiveButton(R.string.confirm, DialogInterface.OnClickListener { dialogInterface, i ->
                 cameraSource?.close()
                 counter?.count = 0
-                val workout = Workout(
-                    type = "squats",
-                    dateTime = Date(),
-                    count = currentCount,
-                    uid = 0
-                )
-
-                val db = AppDatabase.getInstance(this)
-                val workoutDao = db.workoutDao()
-                workoutDao.insertAll(workout)
+                if (currentCount > 0)
+                    savetToDb(counter?.prevWorkoutType!!, currentCount)
                 super.onBackPressed()
             })
             ?.setNegativeButton(R.string.cancel,null)
@@ -124,6 +123,8 @@ class MainActivity : AppCompatActivity() {
         var dialog: AlertDialog? = builder?.create()
         dialog?.show()
     }
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -137,13 +138,20 @@ class MainActivity : AppCompatActivity() {
         tvWorkoutType = findViewById(R.id.workout_type)
         tvCounter = findViewById(R.id.counter_text)
         counter = Counter(this, object : Counter.CounterListener{
-            override fun onExcerciseChangedListener(workoutType: String) {
+            override fun onExcerciseChangedListener(workoutType: String, prevWorkoutType: String, count: Int) {
+                if (count > 0 )
+                    savetToDb(prevWorkoutType, count)
                 runOnUiThread {
                     tvWorkoutType.text = workoutType.uppercase()
                 }
 
             }
 
+            override fun onUnknownListener() {
+                runOnUiThread {
+                    tvWorkoutType.text = "UNKNOWN"
+                }
+            }
         })
         if (!isCameraPermissionGranted()) {
             requestPermission()
@@ -182,7 +190,7 @@ class MainActivity : AppCompatActivity() {
                 cameraSource =
                     CameraSource(surfaceView, object : CameraSource.CameraSourceListener {
                         override fun onFPSListener(fps: Int) {
-                            tvFPS.text = getString(R.string.tfe_pe_tv_fps, fps)
+                           // tvFPS.text = getString(R.string.tfe_pe_tv_fps, fps)
                         }
 
                         override fun onDetectedInfo(
@@ -217,7 +225,18 @@ class MainActivity : AppCompatActivity() {
     }
 
 
+    private  fun savetToDb(type: String, count: Int){
 
+        val workout = Workout(
+            type = type,
+            dateTime = Date(),
+            count = count,
+            uid = Random.nextInt()
+        )
+        appDatabaseViewModel.insert(workout)
+
+
+    }
 
 
     private fun createPoseEstimator() {

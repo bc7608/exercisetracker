@@ -1,23 +1,23 @@
 package org.tensorflow.lite.examples.poseestimation.data.dao
 
-import androidx.room.Dao
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.Query
+import androidx.room.*
+import kotlinx.coroutines.flow.Flow
 import org.tensorflow.lite.examples.poseestimation.data.Workout
 
 @Dao
 interface WorkoutDao {
-    @Query("SELECT * FROM workout")
-    fun getAll(): List<Workout>
+    @Query("SELECT * FROM workout ORDER BY datetime")
+    fun getAll(): Flow<MutableList<Workout>>
 
     @Query("SELECT * FROM workout WHERE uid IN (:workoutUids)")
-    fun getAllByIds(workoutUids: IntArray): List<Workout>
+    suspend fun getAllByIds(workoutUids: IntArray): List<Workout>
 
-    @Insert
-    fun insertAll(vararg workouts: Workout)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(vararg workouts: Workout)
 
+    @Query("DELETE FROM workout")
+    suspend fun deleteAll()
 
     @Delete
-    fun delete(workout: Workout)
+    suspend fun delete(workout: Workout)
 }
